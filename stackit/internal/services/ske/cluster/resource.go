@@ -95,6 +95,7 @@ type Model struct {
 	Extensions            types.Object `tfsdk:"extensions"`
 	EgressAddressRanges   types.List   `tfsdk:"egress_address_ranges"`
 	PodAddressRanges      types.List   `tfsdk:"pod_address_ranges"`
+	ServiceAccountIssuer  types.String `tfsdk:"service_account_issuer"`
 	Region                types.String `tfsdk:"region"`
 }
 
@@ -454,6 +455,13 @@ func (r *clusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				ElementType: types.StringType,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"service_account_issuer": schema.StringAttribute{
+				Description: "Service Account Issuer of the cluster.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"node_pools": schema.ListNestedAttribute{
@@ -1022,7 +1030,7 @@ func (r *clusterResource) createOrUpdateCluster(ctx context.Context, diags *diag
 		core.LogAndAddError(ctx, diags, "Error creating/updating cluster", fmt.Sprintf("Cluster creation waiting: %v", err))
 		return
 	}
-	if waitResp.Status.Error != nil && waitResp.Status.Error.Message != nil && *waitResp.Status.Error.Code == string(legacySke.RUNTIMEERRORCODE_OBSERVABILITY_INSTANCE_NOT_FOUND) {
+	if waitResp.Status.Error != nil && waitResp.Status.Error.Message != nil && string(*waitResp.Status.Error.Code) == string(legacySke.RUNTIMEERRORCODE_OBSERVABILITY_INSTANCE_NOT_FOUND) {
 		core.LogAndAddWarning(ctx, diags, "Warning during creating/updating cluster", fmt.Sprintf("Cluster is in Impaired state due to an invalid observability instance id, the cluster is usable but metrics won't be forwarded: %s", *waitResp.Status.Error.Message))
 	}
 
@@ -1057,7 +1065,7 @@ func toNodepoolsPayload(ctx context.Context, m *Model, availableMachineVersions 
 		ts := []ske.Taint{}
 		for _, v := range taintsModel {
 			t := ske.Taint{
-				Effect: v.Effect.ValueString(),
+				Effect: ske.TaintEffect(v.Effect.ValueString()),
 				Key:    v.Key.ValueString(),
 				Value:  conversion.StringValueToPointer(v.Value),
 			}
@@ -1095,7 +1103,7 @@ func toNodepoolsPayload(ctx context.Context, m *Model, availableMachineVersions 
 		}
 
 		cn := &ske.CRI{
-			Name: conversion.StringValueToPointer(nodePool.CRI),
+			Name: (*ske.NameOfTheCriLibrary)(conversion.StringValueToPointer(nodePool.CRI)),
 		}
 
 		providedVersionMin := conversion.StringValueToPointer(nodePool.OSVersionMin)
@@ -1529,6 +1537,11 @@ func mapFields(ctx context.Context, cl *ske.Cluster, m *Model, region string) er
 		}
 	}
 
+	m.ServiceAccountIssuer = types.StringNull()
+	if cl.Status != nil && cl.Status.ServiceAccountIssuer != nil {
+		m.ServiceAccountIssuer = types.StringValue(*cl.Status.ServiceAccountIssuer)
+	}
+
 	err := mapNodePools(ctx, cl, m)
 	if err != nil {
 		return fmt.Errorf("map node_pools: %w", err)
@@ -1593,7 +1606,7 @@ func mapNodePools(ctx context.Context, cl *ske.Cluster, model *Model) error {
 			"volume_type":             types.StringPointerValue(nodePoolResp.Volume.Type),
 			"volume_size":             types.Int32Value(nodePoolResp.Volume.Size),
 			"labels":                  types.MapNull(types.StringType),
-			"cri":                     types.StringPointerValue(nodePoolResp.Cri.Name),
+			"cri":                     types.StringPointerValue((*string)(nodePoolResp.Cri.Name)),
 			"availability_zones":      types.ListNull(types.StringType),
 			"allow_system_components": types.BoolPointerValue(nodePoolResp.AllowSystemComponents),
 		}

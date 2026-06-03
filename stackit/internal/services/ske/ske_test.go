@@ -88,7 +88,7 @@ resource "stackit_ske_cluster" "cluster" {
 												ExpirationDate: nil,
 												Cri: []ske.CRI{
 													{
-														Name: new(string(legacySke.CRINAME_CONTAINERD)),
+														Name: (*ske.NameOfTheCriLibrary)(new(string(legacySke.CRINAME_CONTAINERD))),
 													},
 												},
 											},
@@ -203,7 +203,7 @@ resource "stackit_ske_cluster" "cluster" {
 				AvailabilityZones:     []string{"eu01-1"},
 				Name:                  nodeName,
 				Cri: new(ske.CRI{
-					Name: new(string(legacySke.CRINAME_CONTAINERD)),
+					Name: (*ske.NameOfTheCriLibrary)(new(string(legacySke.CRINAME_CONTAINERD))),
 				}),
 				Machine: ske.Machine{
 					Image: ske.Image{
@@ -283,7 +283,7 @@ resource "stackit_ske_cluster" "cluster" {
 												ExpirationDate: nil,
 												Cri: []ske.CRI{
 													{
-														Name: new(string(legacySke.CRINAME_CONTAINERD)),
+														Name: (*ske.NameOfTheCriLibrary)(new(string(legacySke.CRINAME_CONTAINERD))),
 													},
 												},
 											},
